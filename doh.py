@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 import json
-import os
 import re
 import socket
 import ssl
@@ -27,16 +26,22 @@ else:
     _urlopen = urllib2.urlopen
     _Request = urllib2.Request
 
-def doh(query, type='A', server=DOH_SERVER, fallback=True, verbose=False):
+def query(name, type='A', server=DOH_SERVER, fallback=True, verbose=False):
     """
-    Returns domain name query results retrieved by using DNS over HTTPS
+    Returns domain name query results retrieved by using DNS over HTTPS protocol
+
     # Reference: https://developers.cloudflare.com/1.1.1.1/dns-over-https/json-format/
+
+    >>> query("one.one.one.one", fallback=False)
+    ['1.0.0.1', '1.1.1.1']
+    >>> query("one", "NS")
+    ['a.nic.one.', 'b.nic.one.', 'c.nic.one.', 'd.nic.one.']
     """
 
     retval = None
 
     try:
-        req = _Request("https://%s/dns-query?name=%s&type=%s" % (server, query, type), headers={"Accept": "application/dns-json"})
+        req = _Request("https://%s/dns-query?name=%s&type=%s" % (server, name, type), headers={"Accept": "application/dns-json"})
         content = _urlopen(req).read().decode()
         reply = json.loads(content)
 
@@ -52,21 +57,24 @@ def doh(query, type='A', server=DOH_SERVER, fallback=True, verbose=False):
     if retval is None and fallback:
         if type == 'A':
             try:
-                retval = socket.gethostbyname_ex(query)[2]
+                retval = socket.gethostbyname_ex(name)[2]
             except (socket.error, IndexError):
                 pass
 
         if retval is None:
-            process = subprocess.Popen(("nslookup", "-q=%s" % type, query), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            process = subprocess.Popen(("nslookup", "-q=%s" % type, name), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             content = (process.communicate()[0] or "").decode().replace("\r", "")
 
             if "\n\n" in content and "can't" not in content.lower():
                 answer = content.split("\n\n", 1)[-1]
-                retval = re.findall(r"(?m)^%s.+= ([^=,\n]+)$" % re.escape(query), answer) or re.findall(r"Address: (.+)", answer)
+                retval = re.findall(r"(?m)^%s.+= ([^=,\n]+)$" % re.escape(name), answer) or re.findall(r"Address: (.+)", answer)
 
                 if not retval:
                     match = re.search(r"Addresses: ([\s\d.]+)", answer)
                     if match:
                         retval = re.split(r"\s+", match.group(1).strip())
+
+    if not PY3 and retval:
+        retval = [_.encode() for _ in retval]
 
     return retval
