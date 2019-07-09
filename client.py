@@ -13,9 +13,9 @@ PY3 = sys.version_info >= (3, 0)
 
 if hasattr(ssl, "_create_unverified_context"):
     ssl._create_default_https_context = ssl._create_unverified_context
-    DOH_SERVER = "1.1.1.1"
+    DOH_SERVER = "1.1.1.1"              # Note: to prevent potential blocking of service based on DNS name
 else:
-    DOH_SERVER = "cloudflare-dns.com"
+    DOH_SERVER = "cloudflare-dns.com"   # Alternative servers: doh.securedns.eu, doh-de.blahdns.com, doh-jp.blahdns.com
 
 if PY3:
     import urllib.request
@@ -26,7 +26,7 @@ else:
     _urlopen = urllib2.urlopen
     _Request = urllib2.Request
 
-def query(name, type='A', server=DOH_SERVER, fallback=True, verbose=False):
+def query(name, type='A', server=DOH_SERVER, path="/dns-query", fallback=True, verbose=False):
     """
     Returns domain name query results retrieved by using DNS over HTTPS protocol
 
@@ -41,7 +41,7 @@ def query(name, type='A', server=DOH_SERVER, fallback=True, verbose=False):
     retval = None
 
     try:
-        req = _Request("https://%s/dns-query?name=%s&type=%s" % (server, name, type), headers={"Accept": "application/dns-json"})
+        req = _Request("https://%s%s?name=%s&type=%s" % (server, path, name, type), headers={"Accept": "application/dns-json"})
         content = _urlopen(req).read().decode()
         reply = json.loads(content)
 
